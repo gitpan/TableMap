@@ -1,5 +1,12 @@
 Revision history for Perl module TableMap.
 
+0.6.2  Sun Jul 16 21:01 2000
+	- New TableMap::DB parameter: you need to allow the usage of 
+	  "prepare_cached", because it sometimes causes mysterious
+	  postgresql crashes.
+	- Fix a very serious bug when creating a new copy of the object.
+	  It is now make a dclone of the param hash.
+	- It is now requires Storable module to run.
 0.6.1  Sun Jul 10 01:27 2000
 	- Added test
 	- replace db.pm with TableMap::DB, which is more cleaner

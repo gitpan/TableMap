@@ -4,4 +4,5 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'TableMap',
     'VERSION_FROM' => 'TableMap.pm', # finds $VERSION
+    'PREREQ_PM'    => { Storable => 0.607 },
 );

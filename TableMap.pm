@@ -18,6 +18,10 @@ TableMap - Maps relational tables into hashes
       # "pg" : "select sequence.last_value";
       # db systems, which doesn't support sequences currently
       # doesn't supported (insert won't work)
+    prepare_cached => 0,
+      # Can use "prepare_cached" method of the DBI?
+      # This causes problems for me, and that's why the
+      # default is now 0. This param is not mandatory.
   );
 
   # You can use connect hash to specify connect parameters directly.
@@ -219,6 +223,7 @@ dLux <dlux@kapu.hu>
 
 package TableMap::DB;
 use strict;
+require Storable;
 use DBI;
 use Carp qw(confess cluck);
 use vars qw($DEBUG);
@@ -238,7 +243,9 @@ sub sql { my ($s,$sql,@array)=@_;
   my $sth;
   eval {
     if (ref($sql) eq 'ARRAY') {
-      $sth=$s->{dbh}->prepare_cached($sql->[0]);
+      $sth=$s->{prepare_cached} ? 
+        $s->{dbh}->prepare_cached($sql->[0]) :
+        $s->{dbh}->prepare($sql->[0]);
     } else {
       $sth=$s->{dbh}->prepare($sql);
     };
@@ -275,7 +282,7 @@ use strict;
 use Carp qw(confess cluck);
 use vars qw($DEBUG $VERSION $cache);
 
-$VERSION='0.6.1';
+$VERSION='0.6.2';
 
 sub cache { $TableMap::cache; };
 
@@ -302,17 +309,19 @@ sub write_cascade { my ($ss)=@_; my $s=tied %$ss;
 };
 
 sub select { my ($ss,$sql,@par)=@_; my $s=tied %$ss;
-  my %p= %{ $s->{param} };
-  $p{"where"}=$sql = exists $p{"where"} ?
-    "(".$p{"where"}.") and ($sql)" : $sql;
-  push @{ $p{"query_param"} },@par;
-  return new TableMap(%p);
+  my $p=$s->clone_param();
+  $p->{"where"}= exists $p->{"where"} ?
+    "(".$p->{"where"}.") and ($sql)" : $sql;
+  push @{ $p->{"query_param"} },@par;
+  return new TableMap(%$p);
 };
 
 sub constraint { my ($ss,%cons)=@_; my $s=tied %$ss;
-  my %p= %{ $s->{param} };
-  $p{"constraint"}=\%cons;
-  return new TableMap(%p);
+  my $p=$s->clone_param();
+  foreach my $i (keys %cons) {
+    $p->{"constraint"}->{$i}=$cons{$i};
+  };
+  return new TableMap(%$p);
 };
 
 sub insert { my ($ss,$data)=@_; my $s=tied %$ss;
@@ -454,6 +463,15 @@ sub FETCH { my ($s,$key)=@_;
 
 sub EXISTS { &FETCH; };
 
+sub clone_param { my ($s)=@_;
+  my $p=$s->{param};
+  my $r; %$r=%$p;
+  foreach my $k (qw(constraint query_param)) {
+    $r->{$k}=Storable::dclone($p->{$k}) if exists $p->{$k};
+  };
+  return $r;
+};
+
 #####################################
 package TableMap::Row;
 use strict;
@@ -480,9 +498,18 @@ sub write { my ($ss)=@_; my $s=tied %$ss;
     push @sql, "$k=?";
     push @data,$s->{newdata}->{$k};
   };
+  my $constraint=$param->{"constraint"};
+  my @where="$key_field=?";
+  push @data,$key_value;
+  if ($constraint) {
+    foreach my $k (keys %$constraint) {
+      push @where,"$k=?";
+      push @data,$constraint->{$k};
+    };
+  };
   if (@sql) {
-    $db->sql(["update $table set ".join(",",@sql)." where $key_field=?"],@data,
-      $key_value);
+    $db->sql(["update $table set ".join(",",@sql)." where ".
+      join(" and ",@where)],@data);
     cache->invalidate_cache([ $table ]);
   };
   $s->{newdata}={};
@@ -495,9 +522,9 @@ sub AUTOLOAD { my ($ss)=@_; my $s=tied %$ss;
   my $back_ref=$param->{back_ref};
   my $ref=$param->{'ref'};
   if (exists $back_ref->{$sub}) {
-    my %param=%{ (tied %{ $back_ref->{$sub}->[0] })->{"param"} };
-    $param{"constraint"}->{ $back_ref->{$sub}->[1] }= $s->{key};
-    return new TableMap (%param);
+    my $param=(tied %{ $back_ref->{$sub}->[0] })->clone_param();
+    $param->{"constraint"}->{ $back_ref->{$sub}->[1] }= $s->{key};
+    return new TableMap (%$param);
   } elsif (exists $ref->{$sub}) {
     return undef if !exists $s->{data}->{$sub};
     return new TableMap::Row( tied %{ $ref->{$sub}->[0] }, 
@@ -570,6 +597,7 @@ sub FETCH { my ($s,$key)=@_;
     return $s->{newdata}->{$key}
   } else {
     $s->read_data;
+    cluck "Invalid TableMap Key!" if !exists $s->{data}->{$key};
     return $s->{data}->{$key};
   };
 };
