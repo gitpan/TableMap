@@ -1,0 +1,10 @@
+Revision history for Perl module TableMap.
+
+0.6.1  Sun Jul 10 01:27 2000
+	- Added test
+	- replace db.pm with TableMap::DB, which is more cleaner
+	- Small bug fix in the constraint code
+
+0.5.1  Sun Jul  2 20:47:58 2000
+	- original version; created by h2xs 1.19
+	- This is now working, but needs testing outside of the home environment
