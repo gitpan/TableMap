@@ -282,7 +282,7 @@ use strict;
 use Carp qw(confess cluck);
 use vars qw($DEBUG $VERSION $cache);
 
-$VERSION='0.6.2';
+$VERSION='1.0';
 
 sub cache { $TableMap::cache; };
 
@@ -622,7 +622,7 @@ sub EXISTS { my ($s,$key)=@_;
 };
 
 sub FIRSTKEY { my ($s)=@_;
-  my $a=keys %{$s->{data}};
+  my $a= scalar keys %{$s->{data}};
   each %{$s->{data}};
 };
 
@@ -688,7 +688,7 @@ sub cache_hit{ my ($s,$path)=@_;
 };
 
 sub invalidate_cache { my ($s,$path)=@_;
-  if (! @$path ) { $s->{cache}={}; return; };
+  if (! @$path ) { $s->{cache}=[{},0,undef]; return; };
   my $walk=$s->{cache};
   for (my $i=0; $i<@$path-1; $i++) {
     my $k=$path->[$i];
